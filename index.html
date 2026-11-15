@@ -365,12 +365,79 @@
                 </div>
             </div>
 
+            <!-- Calendar & Post to Calendar -->
+            <section class="bg-apple-card border border-apple-border rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">Post to Calendar</h3>
+                        <p class="text-xs text-apple-gray mt-1">Pilih tanggal dan slot waktu untuk menjadwalkan konten.</p>
+                    </div>
+                    <span id="calendarLoadStatus" class="text-[10px] text-apple-gray">Memuat kalender…</span>
+                </div>
+
+                <div id="calendarError" class="hidden rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+                    <p id="calendarErrorMessage">Gagal memuat data kalender.</p>
+                    <button type="button" onclick="loadCalendarData()" class="mt-2 font-semibold underline">Coba muat ulang</button>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <button type="button" onclick="changeCalendarMonth(-1)" aria-label="Bulan sebelumnya" class="w-9 h-9 rounded-xl border border-apple-border bg-apple-dark text-white hover:bg-neutral-800">‹</button>
+                    <h4 id="calendarMonthLabel" class="text-sm font-semibold text-white">—</h4>
+                    <button type="button" onclick="changeCalendarMonth(1)" aria-label="Bulan berikutnya" class="w-9 h-9 rounded-xl border border-apple-border bg-apple-dark text-white hover:bg-neutral-800">›</button>
+                </div>
+
+                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-apple-gray">
+                    <span>Min</span><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span>
+                </div>
+                <div id="calendarGrid" class="grid grid-cols-7 gap-1" aria-label="Kalender bulanan"></div>
+                <p class="text-[10px] text-apple-gray">Titik biru menandakan tanggal yang sudah memiliki post. Tanggal lampau tetap dapat dipilih.</p>
+
+                <div id="calendarSelectionSummary" class="hidden rounded-xl border border-apple-border bg-apple-dark p-3">
+                    <p class="text-[10px] text-apple-gray">Tanggal terpilih</p>
+                    <p id="calendarSelectedDateLabel" class="text-sm font-semibold text-white mt-1">—</p>
+                    <button type="button" onclick="openTimeBottomSheet()" class="mt-3 w-full rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-apple-border py-2.5 text-xs font-semibold text-white">Pilih waktu</button>
+                </div>
+            </section>
+
         </section>
     </main>
+
+    <!-- Calendar Time Slot BottomSheet -->
+    <div id="timeBottomSheet" class="hidden fixed inset-0 z-[60]">
+        <button type="button" aria-label="Tutup pilihan waktu" onclick="closeTimeBottomSheet()" class="absolute inset-0 bg-black/70"></button>
+        <div class="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl rounded-t-3xl border border-apple-border bg-[#171719] p-5 pb-8 shadow-2xl">
+            <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-neutral-600"></div>
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-base font-semibold text-white">Pilih Slot Waktu</h3>
+                    <p id="bottomSheetDateLabel" class="text-xs text-apple-gray mt-1">—</p>
+                </div>
+                <button type="button" onclick="closeTimeBottomSheet()" class="w-8 h-8 rounded-full bg-neutral-800 text-neutral-300">✕</button>
+            </div>
+            <div id="timeSlotOptions" class="mt-4 grid grid-cols-1 gap-2"></div>
+            <div id="postSelectionSummary" class="hidden mt-4 rounded-xl bg-apple-dark border border-apple-border p-3">
+                <p class="text-[10px] text-apple-gray">Slot dipilih</p>
+                <p id="selectedTimeLabel" class="text-sm font-semibold text-white mt-1">—</p>
+                <button type="button" id="postToCalendarBtn" onclick="postToCalendar()" class="mt-3 w-full rounded-xl bg-apple-blue hover:bg-apple-blueHover disabled:opacity-50 disabled:cursor-not-allowed py-3 text-sm font-semibold text-white">Post to Calendar</button>
+                <p id="postStatusMessage" class="hidden text-xs mt-2"></p>
+            </div>
+            <p class="mt-3 text-[10px] text-apple-gray">Setiap tanggal memiliki tiga slot: 09:00, 13:00, dan 19:00.</p>
+        </div>
+    </div>
 
     <script>
         const apiKey = ""; // Runtime environment provides key automatically
         let currentImageBase64 = null;
+
+        // Calendar / Post to Calendar state
+        const CALENDAR_API_BASE = "https://jhpbtooefyzdndstlzva.supabase.co/functions/v1/crud-make-webhook";
+        const CALENDAR_TIME_SLOTS = ["09:00", "13:00", "19:00"];
+        let calendarRecords = [];
+        let calendarLoaded = false;
+        let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        let selectedCalendarDate = null;
+        let selectedCalendarTime = null;
+        let isPostingToCalendar = false;
 
         // Preset configurations tailored for Apple Store Malaysia
         const presets = {
@@ -704,9 +771,264 @@ Return strictly valid JSON with keys:
             currentImageBase64 = null;
         }
 
+        // Format local date as YYYY-MM-DD without UTC conversion.
+        function formatLocalDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatCalendarDateLabel(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            return date.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        function getRecordDate(record) {
+            return String(record?.date || '').slice(0, 10);
+        }
+
+        function getRecordTime(record) {
+            return String(record?.time || '').slice(0, 5);
+        }
+
+        function getRecordsForDate(dateString) {
+            return calendarRecords.filter(record => getRecordDate(record) === dateString);
+        }
+
+        function isTimeBooked(dateString, timeString) {
+            return getRecordsForDate(dateString).some(record => getRecordTime(record) === timeString);
+        }
+
+        async function loadCalendarData() {
+            const status = document.getElementById('calendarLoadStatus');
+            const errorBox = document.getElementById('calendarError');
+            const errorMessage = document.getElementById('calendarErrorMessage');
+            status.textContent = 'Memuat kalender…';
+            errorBox.classList.add('hidden');
+            calendarLoaded = false;
+            renderCalendar();
+
+            try {
+                const result = await fetchWithBackoff(`${CALENDAR_API_BASE}/get`, { method: 'GET' });
+                const records = Array.isArray(result) ? result : result?.data;
+                if (!Array.isArray(records)) {
+                    throw new Error(result?.message || 'Format data kalender tidak valid.');
+                }
+                calendarRecords = records;
+                calendarLoaded = true;
+                status.textContent = 'Kalender diperbarui';
+                if (selectedCalendarDate) renderCalendarSelection();
+                renderCalendar();
+                if (!document.getElementById('timeBottomSheet').classList.contains('hidden')) {
+                    renderTimeSlots();
+                }
+            } catch (error) {
+                calendarLoaded = false;
+                status.textContent = 'Kalender tidak tersedia';
+                errorMessage.textContent = error?.message || 'Gagal mengambil data kalender. Silakan coba lagi.';
+                errorBox.classList.remove('hidden');
+                renderCalendar();
+                document.getElementById('calendarSelectionSummary').classList.add('hidden');
+                closeTimeBottomSheet();
+            }
+        }
+
+        function changeCalendarMonth(offset) {
+            calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + offset, 1);
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            const monthLabel = document.getElementById('calendarMonthLabel');
+            const year = calendarMonth.getFullYear();
+            const month = calendarMonth.getMonth();
+            monthLabel.textContent = calendarMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            grid.innerHTML = '';
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let i = 0; i < firstDay; i++) {
+                const blank = document.createElement('span');
+                blank.className = 'h-10';
+                grid.appendChild(blank);
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = formatLocalDate(new Date(year, month, day));
+                const dayRecords = getRecordsForDate(date);
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = String(day);
+                button.disabled = !calendarLoaded;
+                button.className = 'relative h-10 rounded-xl text-xs font-medium border transition ' +
+                    (selectedCalendarDate === date ? 'bg-apple-blue border-apple-blue text-white ' :
+                    'bg-apple-dark border-apple-border text-neutral-200 hover:border-apple-blue/70 ') +
+                    (!calendarLoaded ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer');
+                button.setAttribute('aria-label', `${date}${dayRecords.length ? ', memiliki post' : ''}`);
+                if (dayRecords.length) {
+                    const dot = document.createElement('span');
+                    dot.className = 'absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-sky-400';
+                    button.appendChild(dot);
+                }
+                button.addEventListener('click', () => selectCalendarDate(date));
+                grid.appendChild(button);
+            }
+        }
+
+        function selectCalendarDate(dateString) {
+            if (!calendarLoaded) {
+                showToast('Data kalender belum berhasil dimuat.');
+                return;
+            }
+            selectedCalendarDate = dateString;
+            selectedCalendarTime = null;
+            renderCalendar();
+            renderCalendarSelection();
+            openTimeBottomSheet();
+        }
+
+        function renderCalendarSelection() {
+            const summary = document.getElementById('calendarSelectionSummary');
+            if (!selectedCalendarDate) {
+                summary.classList.add('hidden');
+                return;
+            }
+            document.getElementById('calendarSelectedDateLabel').textContent = formatCalendarDateLabel(selectedCalendarDate);
+            summary.classList.remove('hidden');
+        }
+
+        function openTimeBottomSheet() {
+            if (!calendarLoaded || !selectedCalendarDate) {
+                showToast('Data kalender belum tersedia.');
+                return;
+            }
+            selectedCalendarTime = null;
+            document.getElementById('bottomSheetDateLabel').textContent = formatCalendarDateLabel(selectedCalendarDate);
+            document.getElementById('postSelectionSummary').classList.add('hidden');
+            document.getElementById('postStatusMessage').classList.add('hidden');
+            renderTimeSlots();
+            document.getElementById('timeBottomSheet').classList.remove('hidden');
+        }
+
+        function closeTimeBottomSheet() {
+            document.getElementById('timeBottomSheet').classList.add('hidden');
+        }
+
+        function renderTimeSlots() {
+            const container = document.getElementById('timeSlotOptions');
+            container.innerHTML = '';
+            if (!calendarLoaded || !selectedCalendarDate) return;
+
+            CALENDAR_TIME_SLOTS.forEach(time => {
+                const booked = isTimeBooked(selectedCalendarDate, time);
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.disabled = booked || isPostingToCalendar;
+                button.className = 'flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ' +
+                    (booked ? 'border-neutral-800 bg-neutral-900 text-neutral-500 cursor-not-allowed ' :
+                    selectedCalendarTime === time ? 'border-apple-blue bg-apple-blue/10 text-white ' :
+                    'border-apple-border bg-apple-dark text-white hover:border-apple-blue/70 cursor-pointer');
+                const timeLabel = document.createElement('span');
+                timeLabel.className = 'text-sm font-semibold';
+                timeLabel.textContent = time;
+                const statusLabel = document.createElement('span');
+                statusLabel.className = 'text-[11px] font-semibold ' + (booked ? 'text-neutral-500' : 'text-emerald-400');
+                statusLabel.textContent = booked ? 'Booked' : 'Available';
+                button.append(timeLabel, statusLabel);
+                button.addEventListener('click', () => {
+                    if (booked || isPostingToCalendar) return;
+                    selectedCalendarTime = time;
+                    document.getElementById('selectedTimeLabel').textContent = `${formatCalendarDateLabel(selectedCalendarDate)} • ${time}`;
+                    document.getElementById('postSelectionSummary').classList.remove('hidden');
+                    document.getElementById('postStatusMessage').classList.add('hidden');
+                    renderTimeSlots();
+                });
+                container.appendChild(button);
+            });
+        }
+
+        function getCaptionText() {
+            return document.getElementById('igCaptionOutput').innerText.replace(/^apple\\s+/i, '').trim();
+        }
+
+        async function postToCalendar() {
+            if (isPostingToCalendar) return;
+            if (!calendarLoaded || !selectedCalendarDate || !selectedCalendarTime) {
+                showToast('Pilih tanggal dan slot waktu yang tersedia.');
+                return;
+            }
+            if (!currentImageBase64) {
+                showToast('Generate gambar terlebih dahulu.');
+                return;
+            }
+
+            // Recheck latest booking data immediately before submitting.
+            const button = document.getElementById('postToCalendarBtn');
+            const statusMessage = document.getElementById('postStatusMessage');
+            button.disabled = true;
+            button.textContent = 'Memeriksa ketersediaan…';
+            isPostingToCalendar = true;
+
+            try {
+                const latest = await fetchWithBackoff(`${CALENDAR_API_BASE}/get`, { method: 'GET' });
+                const latestRecords = Array.isArray(latest) ? latest : latest?.data;
+                if (!Array.isArray(latestRecords)) {
+                    throw new Error(latest?.message || 'Tidak dapat memeriksa ketersediaan slot.');
+                }
+                calendarRecords = latestRecords;
+                if (isTimeBooked(selectedCalendarDate, selectedCalendarTime)) {
+                    calendarLoaded = true;
+                    renderCalendar();
+                    renderTimeSlots();
+                    throw new Error('Slot ini baru saja menjadi Booked. Silakan pilih slot lain.');
+                }
+
+                const imageResponse = await fetch(currentImageBase64);
+                const imageBlob = await imageResponse.blob();
+                const mimeType = imageBlob.type || 'image/png';
+                const extension = mimeType.includes('jpeg') ? 'jpg' : (mimeType.split('/')[1] || 'png');
+                const imageFile = new File([imageBlob], `instagram-post-${Date.now()}.${extension}`, { type: mimeType });
+                const formData = new FormData();
+                formData.append('image_url', imageFile);
+                formData.append('caption', getCaptionText());
+                formData.append('date', selectedCalendarDate);
+                formData.append('time', selectedCalendarTime);
+
+                button.textContent = 'Mengirim post…';
+                const response = await fetch(`${CALENDAR_API_BASE}/post`, { method: 'POST', body: formData });
+                let responseData = {};
+                try { responseData = await response.json(); } catch (_) {}
+                if (!response.ok || responseData?.success === false) {
+                    throw new Error(responseData?.message || responseData?.error || `POST gagal (HTTP ${response.status}).`);
+                }
+
+                statusMessage.textContent = 'Post berhasil disimpan ke Calendar.';
+                statusMessage.className = 'text-xs mt-2 text-emerald-400';
+                showToast('Post berhasil ditambahkan ke Calendar.');
+                selectedCalendarTime = null;
+                await loadCalendarData();
+                if (!document.getElementById('timeBottomSheet').classList.contains('hidden')) {
+                    document.getElementById('postSelectionSummary').classList.add('hidden');
+                }
+            } catch (error) {
+                statusMessage.textContent = error?.message || 'Gagal menyimpan post. Gambar dan caption tetap tersedia untuk dicoba kembali.';
+                statusMessage.className = 'text-xs mt-2 text-red-300';
+                statusMessage.classList.remove('hidden');
+                showToast(error?.message || 'Gagal menyimpan post. Silakan coba lagi.');
+            } finally {
+                isPostingToCalendar = false;
+                button.disabled = false;
+                button.textContent = 'Post to Calendar';
+                renderTimeSlots();
+            }
+        }
+
         // Initialize on Load
         window.onload = function() {
             updatePromptBuilder();
+            loadCalendarData();
         };
     </script>
 </body>
