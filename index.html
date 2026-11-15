@@ -221,13 +221,27 @@
                     </div>
                 </div>
 
+                <!-- Fixed Apple Store Malaysia Logo Reference -->
+                <div>
+                    <label for="url_image_logo" class="block text-xs font-medium text-apple-gray mb-1.5">Logo Image Reference (wajib)</label>
+                    <input
+                        type="url"
+                        id="url_image_logo"
+                        value="https://jhpbtooefyzdndstlzva.supabase.co/storage/v1/object/public/apple/logo.png"
+                        readonly
+                        aria-readonly="true"
+                        class="w-full bg-apple-dark border border-apple-border rounded-xl px-3.5 py-2.5 text-xs text-neutral-400 focus:outline-none cursor-not-allowed"
+                    >
+                    <p class="text-[11px] text-apple-gray mt-1.5">Logo diambil dari URL default dan dikirim sebagai image input Gemini untuk setiap generasi. Posisi: sudut kiri atas.</p>
+                </div>
+
                 <!-- Visual Element Toggles -->
                 <div>
                     <label class="block text-xs font-medium text-apple-gray mb-2">Elemen Grafis Meta Ads</label>
                     <div class="flex flex-wrap gap-2">
                         <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-apple-dark border border-apple-border text-xs cursor-pointer select-none">
-                            <input type="checkbox" id="elAppleLogo" checked onchange="updatePromptBuilder()" class="accent-apple-blue rounded">
-                            <span>Apple Minimal Logo</span>
+                            <input type="checkbox" id="elAppleLogo" checked disabled class="accent-apple-blue rounded">
+                            <span>Apple Store MY Logo (Wajib)</span>
                         </label>
                         <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-apple-dark border border-apple-border text-xs cursor-pointer select-none">
                             <input type="checkbox" id="elPriceTag" checked onchange="updatePromptBuilder()" class="accent-apple-blue rounded">
@@ -402,6 +416,8 @@
             }
         };
 
+        const DEFAULT_LOGO_IMAGE_URL = "https://jhpbtooefyzdndstlzva.supabase.co/storage/v1/object/public/apple/logo.png";
+
         // Toast Helper
         function showToast(msg) {
             const toast = document.getElementById('toast');
@@ -462,7 +478,7 @@
             document.getElementById('previewCtaPill').textContent = cta || "Learn More";
 
             const elementsList = [];
-            if (hasLogo) elementsList.push("a clean minimalist Apple logo icon at the top center");
+            if (hasLogo) elementsList.push("the exact supplied Apple Store Malaysia logo reference image, placed clearly in the TOP-LEFT CORNER with balanced inset spacing; preserve its original shape, proportions, colors, and identity without redrawing, replacing, or distorting it");
             if (hasPriceTag) elementsList.push(`a sleek frosted-glass pill badge reading "${badge}"`);
             if (hasSafeZone) elementsList.push("generous outer safe-zone padding optimized for Instagram Meta Ads UI overlays");
 
@@ -570,6 +586,36 @@ Return strictly valid JSON with keys:
             }
         }
 
+        // Fetch the fixed logo URL and prepare temporary Gemini inline image input.
+        // The image is held in memory only and is not persisted to storage.
+        async function fetchLogoImageInput() {
+            const logoUrl = document.getElementById('url_image_logo')?.value || DEFAULT_LOGO_IMAGE_URL;
+            const response = await fetch(logoUrl, { method: 'GET', cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Logo fetch gagal (HTTP ${response.status}). Generasi dihentikan.`);
+            }
+
+            const blob = await response.blob();
+            const mimeType = blob.type || 'image/png';
+            if (!mimeType.startsWith('image/')) {
+                throw new Error('URL logo tidak mengembalikan file gambar. Generasi dihentikan.');
+            }
+
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Gagal membaca file logo.'));
+                reader.readAsDataURL(blob);
+            });
+
+            const base64Data = String(dataUrl).split(',')[1];
+            if (!base64Data) {
+                throw new Error('Data gambar logo tidak valid. Generasi dihentikan.');
+            }
+
+            return { mimeType, data: base64Data };
+        }
+
         // Generate Visual Meta Ads Image using gemini-3.1-flash-image
         async function generateAdImage() {
             const btn = document.getElementById('generateImageBtn');
@@ -589,11 +635,16 @@ Return strictly valid JSON with keys:
             loadingState.classList.remove('hidden');
 
             try {
+                // A logo fetch/read failure must stop generation before calling Gemini.
+                const logoImageInput = await fetchLogoImageInput();
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
                 const payload = {
                     contents: [{
                         role: 'user',
-                        parts: [{ text: promptText }]
+                        parts: [
+                            { text: `${promptText}\n\nLOGO REFERENCE INSTRUCTION: Use the attached image as the exact Apple Store Malaysia logo. Include it visibly in the top-left corner of the generated image. Preserve the logo's original appearance and proportions; do not invent or substitute another logo.` },
+                            { inlineData: logoImageInput }
+                        ]
                     }],
                     generationConfig: {
                         responseModalities: ['IMAGE'],
@@ -622,7 +673,7 @@ Return strictly valid JSON with keys:
                 }
             } catch (err) {
                 emptyState.classList.remove('hidden');
-                showToast("Gagal merender gambar. Silakan coba lagi.");
+                showToast(err?.message || "Gagal merender gambar. Silakan coba lagi.");
             } finally {
                 loadingState.classList.add('hidden');
                 btn.disabled = false;
