@@ -848,7 +848,12 @@
             document.getElementById('headlineInput').value = p.headline;
             document.getElementById('subheadlineInput').value = p.subheadline;
             document.getElementById('ctaInput').value = p.cta;
-            document.getElementById('igCaptionOutput').innerHTML = `<span class="font-semibold text-white">apple</span> ${p.caption}`;
+            const captionOutput = document.getElementById('igCaptionOutput');
+            captionOutput.innerHTML = '';
+            const captionBrand = document.createElement('span');
+            captionBrand.className = 'font-semibold text-white';
+            captionBrand.textContent = 'apple';
+            captionOutput.append(captionBrand, document.createTextNode(' ' + p.caption));
             
             updatePromptBuilder();
             showToast(`Preset diterapkan!`);
