@@ -180,35 +180,36 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium text-apple-gray mb-1.5">Lineup Produk</label>
-                        <select id="productSelect" onchange="updatePromptBuilder()" class="w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue">
-                            <option value="iPhone 16 Pro Max in Desert Titanium">iPhone 16 Pro Max (Titanium)</option>
-                            <option value="iPhone 16 in Ultramarine">iPhone 16 (Ultramarine)</option>
-                            <option value="MacBook Air 15-inch M3 in Midnight">MacBook Air M3 (Midnight)</option>
-                            <option value="iPad Pro M4 Ultra-Thin in Space Black with Apple Pencil Pro">iPad Pro M4 + Pencil Pro</option>
-                            <option value="Apple Watch Series 10 Jet Black Aluminum">Apple Watch Series 10</option>
-                            <option value="AirPods Max in Starlight and AirPods Pro 2">AirPods Max & Pro 2</option>
-                        </select>
+                        <input type="text" id="productSelect" value="iPhone 16 Pro Max in Desert Titanium" oninput="updatePromptBuilder()" class="w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue" placeholder="Product / lineup produk hasil AI atau edit manual">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-apple-gray mb-1.5">Format Instagram Meta Ads</label>
                         <select id="aspectRatio" onchange="updateAspectPreview()" class="w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue">
                             <option value="1:1">IG Feed Square (1:1)</option>
-                            <option value="4:5">IG Feed Portrait (4:5 - High CTR)</option>
+                            <option value="4:5" selected>IG Feed Portrait (4:5 - High CTR)</option>
                             <option value="9:16">IG Story / Reels (9:16)</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Visual Concept / Art Direction -->
+                <!-- Instagram Content Category -->
                 <div>
-                    <label class="block text-xs font-medium text-apple-gray mb-1.5">Konsep Visual & Pencahayaan</label>
-                    <select id="visualStyle" onchange="updatePromptBuilder()" class="w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue">
-                        <option value="Studio Dark Titanium Macro — dramatic rim lighting, floating device on obsidian glass with subtle titanium dust particles">Studio Dark Titanium Macro (Flagship Pro)</option>
-                        <option value="Clean Bento Minimalist — pure #F5F5F7 off-white Apple architectural pedestal, soft diffused daylight shadows, ultra-crisp">Clean Bento Minimalist (Apple Store Classic)</option>
-                        <option value="Kuala Lumpur Architectural Luxury — modern tropical glass pavilion inspired by Apple The Exchange TRX at golden hour dusk">TRX Kuala Lumpur Architectural Dusk</option>
-                        <option value="Vibrant Youth Lifestyle — dynamic floating composition with colorful translucent acrylic blocks, energetic Gen-Z Malaysia aesthetic">Vibrant Lifestyle & Campus Aesthetic</option>
-                        <option value="Festive Emerald & Gold Elegance — subtle modern songket geometric light reflections, warm ambient bokeh for Malaysian festive gifting">Festive Malaysia Luxury (Emerald & Gold)</option>
+                    <label class="block text-xs font-medium text-apple-gray mb-1.5">Kategori Konten Instagram</label>
+                    <select id="contentCategory" onchange="updatePromptBuilder()" class="w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue">
+                        <option value="Product">Product</option>
+                        <option value="Promotion">Promotion</option>
+                        <option value="Lifestyle">Lifestyle</option>
+                        <option value="Education">Education</option>
+                        <option value="News">News</option>
+                        <option value="Comparison">Comparison</option>
+                        <option value="Tips">Tips</option>
                     </select>
+                </div>
+
+                <!-- AI-generated Visual Concept / Art Direction -->
+                <div>
+                    <label class="block text-xs font-medium text-apple-gray mb-1.5">Konsep Visual & Pencahayaan (AI Generated)</label>
+                    <textarea id="visualStyle" rows="3" oninput="updatePromptBuilder()" class="w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue" placeholder="Konsep visual dan pencahayaan akan dihasilkan AI Campaign Brief / Preset dan dapat diedit di sini."></textarea>
                 </div>
             </div>
 
@@ -529,6 +530,7 @@
         // AI Campaign Brief Agent + three-variation AI Preset Generator.
         // Generated presets remain temporary in this page session and reuse the existing preset form.
         let aiGeneratedPresetKeys = [];
+        let aiPresetIncludesCta = true;
 
         const AI_BRIEF_FIELDS = [
             { key: "campaignName", label: "Campaign Name", multiline: false },
@@ -601,17 +603,20 @@
             document.getElementById("campaignBriefPanel").classList.add("hidden");
             document.getElementById("aiPresetResults").classList.add("hidden");
 
-            const productOptions = getSelectOptions("productSelect");
             const languageOptions = getSelectOptions("adLanguage");
+            const contentCategory = document.getElementById("contentCategory").value;
 
             const prompt = [
                 "You are the senior campaign strategist for Apple Store Malaysia.",
                 "Create one complete, practical Instagram campaign brief using the Malaysian market context.",
-                "Choose exactly one product value from the supplied product options and exactly one campaign language value from the supplied language options.",
+                "Generate the Product (product lineup) automatically from your knowledge of Apple products. Do not choose from a fixed product dropdown or rely on a product database. The generated product must be relevant to the campaign context.",
+                "Generate Visual Theme freely, including art direction, environment/background, photography style, lighting, mood, atmosphere, and supporting visual details. Do not restrict the concept to a predefined style list.",
+                "Use the selected Instagram content category to shape the campaign strategy and visual direction.",
+                "Choose exactly one campaign language value from the supplied language options.",
                 "Do not invent product specifications, prices, discounts, instalment terms, stock status, or official offers.",
                 "If no confirmed promotion is supplied, describe a non-price-led promotion/message and clearly avoid claiming a discount.",
                 "Use concise, editable content. Campaign Period may be Evergreen when no fixed dates are supplied.",
-                "Product options: " + JSON.stringify(productOptions),
+                "Instagram content category: " + contentCategory,
                 "Campaign language options: " + JSON.stringify(languageOptions),
                 "Return all 12 required fields as JSON strings."
             ].join("\n");
@@ -657,9 +662,6 @@
                         throw new Error("Field Campaign Brief tidak lengkap: " + field.label);
                     }
                 });
-                if (!productOptions.includes(brief.product)) {
-                    throw new Error("Produk AI tidak cocok dengan pilihan produk pada form. Silakan Generate Brief kembali.");
-                }
                 if (!languageOptions.includes(brief.campaignLanguage)) {
                     throw new Error("Bahasa kampanye AI tidak cocok dengan pilihan bahasa pada form. Silakan Generate Brief kembali.");
                 }
@@ -738,22 +740,24 @@
             setAgentStatus("presetStatus", "AI sedang membuat tiga pendekatan kreatif berbeda…", false);
             document.getElementById("aiPresetResults").classList.add("hidden");
 
-            const productOptions = getSelectOptions("productSelect");
-            const styleOptions = getSelectOptions("visualStyle");
             const languageOptions = getSelectOptions("adLanguage");
             const badgeOptions = getSelectOptions("promoBadge");
+            const contentCategory = document.getElementById("contentCategory").value;
 
             const prompt = [
                 "You are an expert Apple Store Malaysia creative director and Instagram Meta Ads copywriter.",
                 "Generate exactly THREE clearly different creative approaches from this user-edited campaign brief.",
-                "Each variation must have a distinct creativeApproach and visualHook, while remaining faithful to the same campaign brief.",
-                "Return exactly the eight required preset fields: product, style, lang, badge, headline, subheadline, cta, caption.",
-                "Also return variationName, creativeApproach, and visualHook as descriptive optional fields.",
-                "The product, style, lang, and badge values MUST exactly match one value in their respective option lists.",
+                "Each variation must have a distinct creativeApproach and visualHook, while remaining faithful to the same campaign brief and selected Instagram content category.",
+                "Generate product automatically from Apple product knowledge and return it as editable free-form text; do not restrict it to a fixed product list.",
+                "Generate style as a detailed free-form visual concept and lighting direction; do not restrict it to a predefined style list.",
+                "Return exactly the eight required primary preset fields: product, style, lang, badge, headline, subheadline, cta, caption.",
+                "Also return variationName, creativeApproach, visualHook, and includeCta as descriptive/decision fields.",
+                "The lang and badge values MUST exactly match one value in their respective option lists.",
+                "Set includeCta to true only when a visible CTA is appropriate for this content category and creative approach; otherwise set it to false. Do not force a CTA into every image.",
+                "Use the selected category to adapt composition, visual elements, camera/framing, background, and lighting. Category-specific direction: Product = hero product and feature-led; Promotion = offer-led and clear promotional hierarchy; Lifestyle = authentic use context and human-centered storytelling; Education = explanatory and instructional clarity; News = announcement/editorial hierarchy; Comparison = balanced side-by-side comparison; Tips = practical step-by-step visual communication.",
                 "Do not invent product specifications, prices, discounts, instalment amounts, or official offers. If no confirmed price exists, use a benefit-led subheadline without a price.",
                 "Write the copy in the language specified by the campaign brief. Caption should be suitable for Apple Store Malaysia Instagram and include a restrained set of relevant hashtags.",
-                "Product options: " + JSON.stringify(productOptions),
-                "Visual style options: " + JSON.stringify(styleOptions),
+                "Instagram content category: " + contentCategory,
                 "Language options: " + JSON.stringify(languageOptions),
                 "Promotion badge options: " + JSON.stringify(badgeOptions),
                 "Campaign Brief: " + JSON.stringify(brief)
@@ -776,6 +780,7 @@
                                         variationName: { type: "STRING" },
                                         creativeApproach: { type: "STRING" },
                                         visualHook: { type: "STRING" },
+                                        includeCta: { type: "BOOLEAN" },
                                         product: { type: "STRING" },
                                         style: { type: "STRING" },
                                         lang: { type: "STRING" },
@@ -785,7 +790,7 @@
                                         cta: { type: "STRING" },
                                         caption: { type: "STRING" }
                                     },
-                                    required: ["variationName", "creativeApproach", "visualHook", "product", "style", "lang", "badge", "headline", "subheadline", "cta", "caption"]
+                                    required: ["variationName", "creativeApproach", "visualHook", "includeCta", "product", "style", "lang", "badge", "headline", "subheadline", "cta", "caption"]
                                 }
                             }
                         }
@@ -807,8 +812,7 @@
                             throw new Error("Preset variasi " + (index + 1) + " tidak lengkap pada field " + field + ".");
                         }
                     });
-                    if (!productOptions.includes(variation.product) ||
-                        !styleOptions.includes(variation.style) ||
+                    if (typeof variation.includeCta !== "boolean" ||
                         !languageOptions.includes(variation.lang) ||
                         !badgeOptions.includes(variation.badge)) {
                         throw new Error("Preset variasi " + (index + 1) + " berisi pilihan yang tidak tersedia pada form. Silakan generate ulang.");
@@ -843,6 +847,7 @@
             if (!p) return;
             document.getElementById('productSelect').value = p.product;
             document.getElementById('visualStyle').value = p.style;
+            aiPresetIncludesCta = typeof p.includeCta === "boolean" ? p.includeCta : true;
             document.getElementById('adLanguage').value = p.lang;
             document.getElementById('promoBadge').value = p.badge;
             document.getElementById('headlineInput').value = p.headline;
@@ -875,7 +880,8 @@
         // Build Structured Prompt for Gemini Image Model
         function updatePromptBuilder() {
             const product = document.getElementById('productSelect').value;
-            const style = document.getElementById('visualStyle').value;
+            const style = document.getElementById('visualStyle').value.trim();
+            const category = document.getElementById('contentCategory').value;
             const ratio = document.getElementById('aspectRatio').value;
             const lang = document.getElementById('adLanguage').value;
             const badge = document.getElementById('promoBadge').value;
@@ -889,18 +895,24 @@
 
             // Update live mockup footer
             document.getElementById('previewFooterTitle').textContent = headline || product;
-            document.getElementById('previewCtaPill').textContent = cta || "Learn More";
+            const previewCta = document.getElementById('previewCtaPill');
+            previewCta.textContent = cta || "Learn More";
+            previewCta.classList.toggle('hidden', !aiPresetIncludesCta);
 
             const elementsList = [];
             if (hasLogo) elementsList.push("the exact supplied Apple Store Malaysia logo reference image, placed clearly in the TOP-LEFT CORNER with balanced inset spacing; preserve its original shape, proportions, colors, and identity without redrawing, replacing, or distorting it");
             if (hasPriceTag) elementsList.push(`a sleek frosted-glass pill badge reading "${badge}"`);
             if (hasSafeZone) elementsList.push("generous outer safe-zone padding optimized for Instagram Meta Ads UI overlays");
 
-            const promptText = `High-end commercial product advertisement poster for Apple Store Malaysia Instagram Meta Ads (${ratio} format). 
-Hero Subject: ${product}, ultra-detailed photorealistic 8K studio render, razor-sharp industrial aluminum/titanium textures and OLED screen reflections.
-Art Direction & Environment: ${style}.
-Typography & Graphic Layout (${lang}): Clean Apple SF Pro geometric sans-serif typography integrated harmoniously into the upper composition. Bold crisp headline text reading "${headline}". Secondary subtitle text below reading "${subheadline}". Includes ${elementsList.join(", ")}.
-Color Grading: Authentic Apple Store flagship visual identity, high dynamic range, balanced negative space, no clutter, award-winning commercial advertising photography.`;
+            const ctaInstruction = aiPresetIncludesCta && cta
+                ? ` Include a clear but restrained CTA element reading "${cta}" because the AI determined it is appropriate for this category and creative approach.`
+                : " Do not display a CTA button, CTA pill, or call-to-action text anywhere in the image.";
+            const promptText = `High-end commercial Instagram creative for Apple Store Malaysia (${category} category, ${ratio} format).
+Hero Subject: ${product}, ultra-detailed photorealistic commercial product photography, accurate recognizable product design and realistic materials.
+Category-specific creative direction: Adapt visual storytelling, composition, visual hierarchy, camera angle/framing, background, and supporting elements specifically for the ${category} category.
+Art Direction, Environment & Lighting: ${style || "Create an original visual concept and lighting direction appropriate to the selected category and campaign brief."}
+Typography & Graphic Layout (${lang}): Clean premium sans-serif typography. Headline text: "${headline}". Supporting text: "${subheadline}".${ctaInstruction} Includes ${elementsList.join(", ")}.
+Color Grading: Premium Apple Store Malaysia visual identity, balanced negative space, clear hierarchy, no clutter, polished commercial photography.`;
 
             document.getElementById('generatedPrompt').value = promptText;
         }
@@ -1040,8 +1052,7 @@ Return strictly valid JSON with keys:
 
             const promptText = document.getElementById('generatedPrompt').value.trim();
             const ratio = document.getElementById('aspectRatio').value;
-            // Map 4:5 to closest supported aspect ratio 3:4 if needed, or pass standard ratio
-            const apiAspectRatio = ratio === '4:5' ? '3:4' : ratio;
+            const apiAspectRatio = ratio;
 
             btn.disabled = true;
             btn.classList.add('opacity-70');
@@ -1110,7 +1121,7 @@ Return strictly valid JSON with keys:
         // Reset Form
         function resetForm() {
             applyPreset('iphone_pro');
-            document.getElementById('aspectRatio').value = '1:1';
+            document.getElementById('aspectRatio').value = '4:5';
             updateAspectPreview();
             document.getElementById('adImageOutput').classList.add('hidden');
             document.getElementById('emptyState').classList.remove('hidden');
