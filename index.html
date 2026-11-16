@@ -103,6 +103,46 @@
         <!-- LEFT PANEL: Campaign & Visual Elements Configurator -->
         <section class="lg:col-span-5 space-y-5">
             
+
+            <!-- AI Campaign Brief Agent & AI Preset Generator -->
+            <div class="bg-apple-card border border-apple-border rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-semibold text-white">AI Campaign Studio</h2>
+                        <p class="text-[11px] text-apple-gray mt-1">Campaign Brief Agent → 3 Creative Presets</p>
+                    </div>
+                    <span class="px-2 py-1 rounded-full text-[10px] font-semibold bg-apple-blue/15 text-blue-300 border border-blue-500/30">AI AGENT</span>
+                </div>
+
+                <div class="rounded-xl bg-apple-dark border border-apple-border p-3 space-y-2">
+                    <p class="text-xs text-neutral-300">Buat brief kampanye Apple Store Malaysia secara otomatis. Tinjau dan edit brief sebelum menghasilkan tiga pendekatan kreatif.</p>
+                    <button type="button" id="generateBriefBtn" onclick="generateCampaignBrief()" class="w-full rounded-xl bg-apple-blue hover:bg-apple-blueHover disabled:opacity-50 py-2.5 text-xs font-semibold text-white transition">
+                        ✨ Generate Brief
+                    </button>
+                    <p id="briefStatus" class="hidden text-[11px] text-apple-gray" aria-live="polite"></p>
+                </div>
+
+                <div id="campaignBriefPanel" class="hidden space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-semibold text-white">Campaign Brief</h3>
+                        <span class="text-[10px] text-apple-gray">12 editable fields</span>
+                    </div>
+                    <div id="campaignBriefFields" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                    <button type="button" id="generatePresetsBtn" onclick="generateAIPresets()" class="w-full rounded-xl border border-blue-500/50 bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-50 py-2.5 text-xs font-semibold text-blue-300 transition">
+                        Generate 3 Preset Variations
+                    </button>
+                    <p id="presetStatus" class="hidden text-[11px] text-apple-gray" aria-live="polite"></p>
+                </div>
+
+                <div id="aiPresetResults" class="hidden space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-semibold text-white">AI Generated Presets</h3>
+                        <span class="text-[10px] text-apple-gray">3 creative approaches</span>
+                    </div>
+                    <div id="aiPresetCards" class="space-y-2"></div>
+                </div>
+            </div>
+
             <!-- Step 1: Product & Malaysia Campaign Preset -->
             <div class="bg-apple-card border border-apple-border rounded-2xl p-5 space-y-4">
                 <div class="flex items-center justify-between">
@@ -484,6 +524,308 @@
         };
 
         const DEFAULT_LOGO_IMAGE_URL = "https://jhpbtooefyzdndstlzva.supabase.co/storage/v1/object/public/apple/logo.png";
+
+
+        // AI Campaign Brief Agent + three-variation AI Preset Generator.
+        // Generated presets remain temporary in this page session and reuse the existing preset form.
+        let aiGeneratedPresetKeys = [];
+
+        const AI_BRIEF_FIELDS = [
+            { key: "campaignName", label: "Campaign Name", multiline: false },
+            { key: "product", label: "Product", multiline: false },
+            { key: "campaignObjective", label: "Campaign Objective", multiline: true },
+            { key: "targetAudience", label: "Target Audience", multiline: true },
+            { key: "promotion", label: "Promotion", multiline: true },
+            { key: "visualTheme", label: "Visual Theme", multiline: true },
+            { key: "campaignLanguage", label: "Campaign Language", multiline: false },
+            { key: "keyMessage", label: "Key Message", multiline: true },
+            { key: "productBenefits", label: "Product Benefits", multiline: true },
+            { key: "contentAngle", label: "Content Angle", multiline: true },
+            { key: "ctaStrategy", label: "CTA Strategy", multiline: true },
+            { key: "campaignPeriod", label: "Campaign Period", multiline: false }
+        ];
+
+        function getSelectOptions(selectId) {
+            return Array.from(document.getElementById(selectId).options).map(function(option) {
+                return option.value;
+            }).filter(Boolean);
+        }
+
+        function setAgentStatus(elementId, message, isError) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.classList.remove("hidden", "text-red-300", "text-apple-gray", "text-emerald-400");
+            element.classList.add(isError ? "text-red-300" : "text-apple-gray");
+        }
+
+        function renderCampaignBrief(brief) {
+            const container = document.getElementById("campaignBriefFields");
+            container.innerHTML = "";
+
+            AI_BRIEF_FIELDS.forEach(function(field) {
+                const wrapper = document.createElement("div");
+                wrapper.className = field.multiline ? "sm:col-span-2" : "";
+                const label = document.createElement("label");
+                label.className = "block text-[11px] font-medium text-apple-gray mb-1.5";
+                label.textContent = field.label;
+                label.htmlFor = "brief_" + field.key;
+
+                const input = document.createElement(field.multiline ? "textarea" : "input");
+                input.id = "brief_" + field.key;
+                input.value = brief[field.key] || "";
+                input.rows = field.multiline ? 2 : 1;
+                input.className = "w-full bg-apple-dark border border-apple-border rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-apple-blue";
+                input.setAttribute("aria-label", field.label);
+                wrapper.append(label, input);
+                container.appendChild(wrapper);
+            });
+
+            document.getElementById("campaignBriefPanel").classList.remove("hidden");
+        }
+
+        function getEditedCampaignBrief() {
+            const brief = {};
+            AI_BRIEF_FIELDS.forEach(function(field) {
+                const input = document.getElementById("brief_" + field.key);
+                brief[field.key] = input ? input.value.trim() : "";
+            });
+            return brief;
+        }
+
+        async function generateCampaignBrief() {
+            const button = document.getElementById("generateBriefBtn");
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "Generating Campaign Brief…";
+            setAgentStatus("briefStatus", "AI sedang menyusun campaign brief…", false);
+            document.getElementById("campaignBriefPanel").classList.add("hidden");
+            document.getElementById("aiPresetResults").classList.add("hidden");
+
+            const productOptions = getSelectOptions("productSelect");
+            const languageOptions = getSelectOptions("adLanguage");
+
+            const prompt = [
+                "You are the senior campaign strategist for Apple Store Malaysia.",
+                "Create one complete, practical Instagram campaign brief using the Malaysian market context.",
+                "Choose exactly one product value from the supplied product options and exactly one campaign language value from the supplied language options.",
+                "Do not invent product specifications, prices, discounts, instalment terms, stock status, or official offers.",
+                "If no confirmed promotion is supplied, describe a non-price-led promotion/message and clearly avoid claiming a discount.",
+                "Use concise, editable content. Campaign Period may be Evergreen when no fixed dates are supplied.",
+                "Product options: " + JSON.stringify(productOptions),
+                "Campaign language options: " + JSON.stringify(languageOptions),
+                "Return all 12 required fields as JSON strings."
+            ].join("\n");
+
+            try {
+                const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey;
+                const response = await fetchWithBackoff(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    campaignName: { type: "STRING" },
+                                    product: { type: "STRING" },
+                                    campaignObjective: { type: "STRING" },
+                                    targetAudience: { type: "STRING" },
+                                    promotion: { type: "STRING" },
+                                    visualTheme: { type: "STRING" },
+                                    campaignLanguage: { type: "STRING" },
+                                    keyMessage: { type: "STRING" },
+                                    productBenefits: { type: "STRING" },
+                                    contentAngle: { type: "STRING" },
+                                    ctaStrategy: { type: "STRING" },
+                                    campaignPeriod: { type: "STRING" }
+                                },
+                                required: AI_BRIEF_FIELDS.map(function(field) { return field.key; })
+                            }
+                        }
+                    })
+                });
+
+                const rawText = response && response.candidates && response.candidates[0] &&
+                    response.candidates[0].content && response.candidates[0].content.parts &&
+                    response.candidates[0].content.parts[0] && response.candidates[0].content.parts[0].text;
+                if (!rawText) throw new Error("Gemini tidak mengembalikan Campaign Brief.");
+                const brief = JSON.parse(rawText);
+                AI_BRIEF_FIELDS.forEach(function(field) {
+                    if (typeof brief[field.key] !== "string" || !brief[field.key].trim()) {
+                        throw new Error("Field Campaign Brief tidak lengkap: " + field.label);
+                    }
+                });
+                if (!productOptions.includes(brief.product)) {
+                    throw new Error("Produk AI tidak cocok dengan pilihan produk pada form. Silakan Generate Brief kembali.");
+                }
+                if (!languageOptions.includes(brief.campaignLanguage)) {
+                    throw new Error("Bahasa kampanye AI tidak cocok dengan pilihan bahasa pada form. Silakan Generate Brief kembali.");
+                }
+
+                renderCampaignBrief(brief);
+                setAgentStatus("briefStatus", "Campaign Brief berhasil dibuat. Periksa dan edit seluruh field sebelum Generate Preset.", false);
+                showToast("Campaign Brief berhasil dibuat!");
+            } catch (error) {
+                setAgentStatus("briefStatus", error && error.message ? error.message : "Gagal membuat Campaign Brief.", true);
+                showToast("Gagal membuat Campaign Brief.");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        function renderAIPresetVariations(variations) {
+            const container = document.getElementById("aiPresetCards");
+            container.innerHTML = "";
+            aiGeneratedPresetKeys.forEach(function(key) { delete presets[key]; });
+            aiGeneratedPresetKeys = [];
+
+            variations.forEach(function(variation, index) {
+                const key = "ai_generated_" + Date.now() + "_" + index;
+                presets[key] = variation;
+                aiGeneratedPresetKeys.push(key);
+
+                const card = document.createElement("div");
+                card.className = "rounded-xl border border-apple-border bg-apple-dark p-3 space-y-2";
+                const top = document.createElement("div");
+                top.className = "flex items-center justify-between gap-2";
+                const title = document.createElement("h4");
+                title.className = "text-xs font-semibold text-white";
+                title.textContent = (index + 1) + ". " + (variation.variationName || "Creative Variation " + (index + 1));
+                const tag = document.createElement("span");
+                tag.className = "text-[10px] text-blue-300";
+                tag.textContent = "AI PRESET";
+                top.append(title, tag);
+
+                const approach = document.createElement("p");
+                approach.className = "text-[11px] text-apple-gray";
+                approach.textContent = variation.creativeApproach || variation.visualHook || "";
+                const copy = document.createElement("p");
+                copy.className = "text-xs text-neutral-200";
+                copy.textContent = variation.headline + " — " + variation.subheadline;
+
+                const meta = document.createElement("p");
+                meta.className = "text-[10px] text-apple-gray";
+                meta.textContent = "CTA: " + variation.cta + " · " + variation.lang;
+
+                const applyButton = document.createElement("button");
+                applyButton.type = "button";
+                applyButton.className = "w-full rounded-lg bg-apple-blue hover:bg-apple-blueHover py-2 text-xs font-semibold text-white transition";
+                applyButton.textContent = "Apply Preset";
+                applyButton.addEventListener("click", function() { applyPreset(key); });
+
+                card.append(top, approach, copy, meta, applyButton);
+                container.appendChild(card);
+            });
+
+            document.getElementById("aiPresetResults").classList.remove("hidden");
+        }
+
+        async function generateAIPresets() {
+            const brief = getEditedCampaignBrief();
+            const missing = AI_BRIEF_FIELDS.find(function(field) { return !brief[field.key]; });
+            if (missing) {
+                setAgentStatus("presetStatus", "Lengkapi field " + missing.label + " sebelum membuat preset.", true);
+                return;
+            }
+
+            const button = document.getElementById("generatePresetsBtn");
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "Generating 3 Creative Presets…";
+            setAgentStatus("presetStatus", "AI sedang membuat tiga pendekatan kreatif berbeda…", false);
+            document.getElementById("aiPresetResults").classList.add("hidden");
+
+            const productOptions = getSelectOptions("productSelect");
+            const styleOptions = getSelectOptions("visualStyle");
+            const languageOptions = getSelectOptions("adLanguage");
+            const badgeOptions = getSelectOptions("promoBadge");
+
+            const prompt = [
+                "You are an expert Apple Store Malaysia creative director and Instagram Meta Ads copywriter.",
+                "Generate exactly THREE clearly different creative approaches from this user-edited campaign brief.",
+                "Each variation must have a distinct creativeApproach and visualHook, while remaining faithful to the same campaign brief.",
+                "Return exactly the eight required preset fields: product, style, lang, badge, headline, subheadline, cta, caption.",
+                "Also return variationName, creativeApproach, and visualHook as descriptive optional fields.",
+                "The product, style, lang, and badge values MUST exactly match one value in their respective option lists.",
+                "Do not invent product specifications, prices, discounts, instalment amounts, or official offers. If no confirmed price exists, use a benefit-led subheadline without a price.",
+                "Write the copy in the language specified by the campaign brief. Caption should be suitable for Apple Store Malaysia Instagram and include a restrained set of relevant hashtags.",
+                "Product options: " + JSON.stringify(productOptions),
+                "Visual style options: " + JSON.stringify(styleOptions),
+                "Language options: " + JSON.stringify(languageOptions),
+                "Promotion badge options: " + JSON.stringify(badgeOptions),
+                "Campaign Brief: " + JSON.stringify(brief)
+            ].join("\n");
+
+            try {
+                const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey;
+                const response = await fetchWithBackoff(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        variationName: { type: "STRING" },
+                                        creativeApproach: { type: "STRING" },
+                                        visualHook: { type: "STRING" },
+                                        product: { type: "STRING" },
+                                        style: { type: "STRING" },
+                                        lang: { type: "STRING" },
+                                        badge: { type: "STRING" },
+                                        headline: { type: "STRING" },
+                                        subheadline: { type: "STRING" },
+                                        cta: { type: "STRING" },
+                                        caption: { type: "STRING" }
+                                    },
+                                    required: ["variationName", "creativeApproach", "visualHook", "product", "style", "lang", "badge", "headline", "subheadline", "cta", "caption"]
+                                }
+                            }
+                        }
+                    })
+                });
+
+                const rawText = response && response.candidates && response.candidates[0] &&
+                    response.candidates[0].content && response.candidates[0].content.parts &&
+                    response.candidates[0].content.parts[0] && response.candidates[0].content.parts[0].text;
+                if (!rawText) throw new Error("Gemini tidak mengembalikan variasi preset.");
+                const variations = JSON.parse(rawText);
+                if (!Array.isArray(variations) || variations.length !== 3) {
+                    throw new Error("AI harus mengembalikan tepat tiga variasi preset.");
+                }
+
+                variations.forEach(function(variation, index) {
+                    ["product", "style", "lang", "badge", "headline", "subheadline", "cta", "caption"].forEach(function(field) {
+                        if (typeof variation[field] !== "string" || !variation[field].trim()) {
+                            throw new Error("Preset variasi " + (index + 1) + " tidak lengkap pada field " + field + ".");
+                        }
+                    });
+                    if (!productOptions.includes(variation.product) ||
+                        !styleOptions.includes(variation.style) ||
+                        !languageOptions.includes(variation.lang) ||
+                        !badgeOptions.includes(variation.badge)) {
+                        throw new Error("Preset variasi " + (index + 1) + " berisi pilihan yang tidak tersedia pada form. Silakan generate ulang.");
+                    }
+                });
+
+                renderAIPresetVariations(variations);
+                setAgentStatus("presetStatus", "Tiga variasi preset berhasil dibuat. Pilih Apply Preset pada variasi yang ingin digunakan.", false);
+                showToast("3 variasi preset berhasil dibuat!");
+            } catch (error) {
+                setAgentStatus("presetStatus", error && error.message ? error.message : "Gagal membuat variasi preset.", true);
+                showToast("Gagal membuat 3 preset AI.");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
 
         // Toast Helper
         function showToast(msg) {
